@@ -1,8 +1,46 @@
-
+//! `strength_reduce` implements integer division and modulo via "arithmetic strength reduction"
+//!
+//! This results in much better performance when computing repeated divisions or modulos.
+//!
+//! # Example:
+//! ```
+//! use strength_reduce::StrengthReducedU64;
+//! 
+//! let mut my_array: Vec<u64> = (0..500).collect();
+//! let divisor = 3;
+//! let modulo = 14;
+//!
+//! // slow naive division and modulo
+//! for element in &mut my_array {
+//!     *element = (*element / divisor) % modulo;
+//! }
+//!
+//! // fast strength-reduced division and modulo
+//! let reduced_divisor = StrengthReducedU64::new(divisor);
+//! let reduced_modulo = StrengthReducedU64::new(modulo);
+//! for element in &mut my_array {
+//!     *element = (*element / reduced_divisor) % reduced_modulo;
+//! }
+//! ```
+//!
+//! The intended use case for StrengthReducedU## is for use in hot loops like the one in the example above:
+//! A division is repeated hundreds of times in a loop, but the divisor remains unchanged. In these cases,
+//! strength-reduced division and modulo are 5x-10x faster than naive division and modulo.
+//!
+//! Benchmarking suggests that for u8, u16, and u32, on a x64 windows PC, using StrengthReducedU## is
+//! **always** faster than naive division or modulo, even when not used inside a loop.
+//! For u64, it's slower if it's only used a few times, due to nontrivial setup costs, with a break-even point around 10-20.
+//!
+//! The optimizations that this library provides are inherently dependent on architecture, compiler, and platform,
+//! so test before you use. 
 use std::ops::{Div, Rem};
 
 macro_rules! strength_reduced_impl {
     ($struct_name:ident, $primitive_type:ident, $intermediate_type:ident, $bit_width:expr) => (
+        /// Implements unsigned division and modulo via mutiplication and shifts.
+        ///
+        /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
+        /// this version will be several times faster than naive division.
         #[derive(Clone, Copy, Debug)]
         pub struct $struct_name {
             multiplier: $primitive_type,
@@ -10,6 +48,13 @@ macro_rules! strength_reduced_impl {
             shift_value: u8,
         }
         impl $struct_name {
+            /// Creates a new divisor instance.
+            ///
+            /// If possible, avoid calling new() from an inner loop: The intended usage is to create an instance of this struct outside the loop, and use it for divison and remainders inside the loop.
+            ///
+            /// # Panics:
+            /// 
+            /// Panics if `divisor` is 0
             #[inline]
             pub fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
@@ -28,6 +73,8 @@ macro_rules! strength_reduced_impl {
                 }
             }
 
+            /// Simultaneous truncated integer division and modulus.
+            /// Returns `(quotient, remainder)`.
             #[inline]
             pub fn div_rem(numerator: $primitive_type, denom: Self) -> ($primitive_type, $primitive_type) {
                 let quotient = numerator / denom;
@@ -35,6 +82,7 @@ macro_rules! strength_reduced_impl {
                 (quotient, remainder)
             }
 
+            /// Retrieve the value used to create this struct
             #[inline]
             pub fn get(&self) -> $primitive_type {
                 self.divisor
@@ -68,6 +116,10 @@ macro_rules! strength_reduced_impl {
 // in the "intermediate_multiplier" version, we store the mutiplier as the intermediate type instead of as the primitive type, and the mutiply routine is slightly more complicated
 macro_rules! strength_reduced_impl_intermediate_multiplier {
     ($struct_name:ident, $primitive_type:ident, $intermediate_type:ident, $bit_width:expr) => (
+        /// Implements unsigned division and modulo via mutiplication and shifts.
+        ///
+        /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
+        /// this version will be several times faster than naive division.
         #[derive(Clone, Copy, Debug)]
         pub struct $struct_name {
             multiplier: $intermediate_type,
@@ -75,6 +127,13 @@ macro_rules! strength_reduced_impl_intermediate_multiplier {
             shift_value: u8,
         }
         impl $struct_name {
+            /// Creates a new divisor instance.
+            ///
+            /// If possible, avoid calling new() from an inner loop: The intended usage is to create an instance of this struct outside the loop, and use it for divison and remainders inside the loop.
+            ///
+            /// # Panics:
+            /// 
+            /// Panics if `divisor` is 0
             #[inline]
             pub fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
@@ -92,6 +151,8 @@ macro_rules! strength_reduced_impl_intermediate_multiplier {
                 }
             }
 
+            /// Simultaneous truncated integer division and modulus.
+            /// Returns `(quotient, remainder)`.
             #[inline]
             pub fn div_rem(numerator: $primitive_type, denom: Self) -> ($primitive_type, $primitive_type) {
                 let quotient = numerator / denom;
@@ -99,6 +160,7 @@ macro_rules! strength_reduced_impl_intermediate_multiplier {
                 (quotient, remainder)
             }
 
+            /// Retrieve the value used to create this struct
             #[inline]
             pub fn get(&self) -> $primitive_type {
                 self.divisor
