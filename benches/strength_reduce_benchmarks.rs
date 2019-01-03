@@ -12,10 +12,8 @@ macro_rules! reduced_division_bench {
 		    	let inner_height = test::black_box(height);
 
 		    	let mut sum = 0;
-		    	for y in 0..height {
-					for x in 0..width {
-						sum += (x + y) / inner_height;
-					}
+				for x in 0..width {
+					sum += x / inner_height;
 				}
 		    	test::black_box(sum);
 		     });
@@ -29,10 +27,8 @@ macro_rules! reduced_division_bench {
 			let reduced_height = strength_reduce::$struct_name::new(height);
 		    b.iter(|| { 
 				let mut sum = 0;
-				for y in 0..height {
-					for x in 0..width {
-						sum += (x + y) / reduced_height;
-					}
+				for x in 0..width {
+					sum += x / reduced_height;
 				}
 				test::black_box(sum);
 			});
@@ -44,6 +40,7 @@ reduced_division_bench!(bench_standard_division_u08, bench_reduced_division_u08,
 reduced_division_bench!(bench_standard_division_u16, bench_reduced_division_u16, StrengthReducedU16, u16);
 reduced_division_bench!(bench_standard_division_u32, bench_reduced_division_u32, StrengthReducedU32, u32);
 reduced_division_bench!(bench_standard_division_u64, bench_reduced_division_u64, StrengthReducedU64, u64);
+reduced_division_bench!(bench_standard_division_usize, bench_reduced_division_usize, StrengthReducedUsize, usize);
 
 macro_rules! reduced_mod_bench {
     ($standard_bench_name:ident, $reduced_bench_name:ident, $struct_name:ident, $primitive_type:ident) => (
@@ -55,11 +52,9 @@ macro_rules! reduced_mod_bench {
 		    	let inner_height = test::black_box(height);
 
 		    	let mut sum = 0;
-		    	for y in 0..height {
-			    	for x in 0..width {
-			    		sum += (x * width + y) % inner_height;
-			    	}
-			    }
+		    	for x in 0..width {
+		    		sum += x % inner_height;
+		    	}
 		    	test::black_box(sum);
 		     });
 		}
@@ -72,11 +67,9 @@ macro_rules! reduced_mod_bench {
 			let reduced_height = strength_reduce::$struct_name::new(height);
 		    b.iter(|| { 
 				let mut sum = 0;
-		    	for y in 0..height {
-			    	for x in 0..width {
-			    		sum += (x * width + y) % reduced_height;
-			    	}
-			    }
+		    	for x in 0..width {
+		    		sum += x % reduced_height;
+		    	}
 		    	test::black_box(sum);
 			});
 		}
@@ -87,3 +80,4 @@ reduced_mod_bench!(bench_standard_modulo_u08, bench_reduced_modulo_u08, Strength
 reduced_mod_bench!(bench_standard_modulo_u16, bench_reduced_modulo_u16, StrengthReducedU16, u16);
 reduced_mod_bench!(bench_standard_modulo_u32, bench_reduced_modulo_u32, StrengthReducedU32, u32);
 reduced_mod_bench!(bench_standard_modulo_u64, bench_reduced_modulo_u64, StrengthReducedU64, u64);
+reduced_mod_bench!(bench_standard_modulo_usize, bench_reduced_modulo_usize, StrengthReducedUsize, usize);
