@@ -195,6 +195,17 @@ strength_reduced_impl!(StrengthReducedU16, u16, u32, 16);
 strength_reduced_impl_intermediate_multiplier!(StrengthReducedU32, u32, u64, 32);
 strength_reduced_impl_intermediate_multiplier!(StrengthReducedU64, u64, u128, 64);
 
+// Our definition for usize will depend on how big usize is
+#[cfg(target_pointer_width = "16")]
+strength_reduced_impl!(StrengthReducedUsize, usize, u32, 16);
+#[cfg(target_pointer_width = "32")]
+strength_reduced_impl_intermediate_multiplier!(StrengthReducedUsize, usize, u64, 32);
+#[cfg(target_pointer_width = "64")]
+strength_reduced_impl_intermediate_multiplier!(StrengthReducedUsize, usize, u128, 64);
+
+
+
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -231,4 +242,5 @@ mod unit_tests {
     reduction_test!(test_strength_reduced_u16, StrengthReducedU16, u16);
     reduction_test!(test_strength_reduced_u32, StrengthReducedU32, u32);
     reduction_test!(test_strength_reduced_u64, StrengthReducedU64, u64);
+    reduction_test!(test_strength_reduced_usize, StrengthReducedUsize, usize);
 }
