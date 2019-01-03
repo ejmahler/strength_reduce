@@ -10,6 +10,8 @@ Faster integer division and modulus operations.
 
 Although this library can speed up any division or modulo operation, it's intended for hot loops like the example below, where a division is repeated hundreds of times in a loop, but the divisor remains unchanged.
 
+`strength_reduce` is `#![no_std]`
+
 See the [API Documentation](https://docs.rs/strength_reduce/) for more details.
 
 ## Example

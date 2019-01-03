@@ -33,7 +33,9 @@
 //!
 //! The optimizations that this library provides are inherently dependent on architecture, compiler, and platform,
 //! so test before you use. 
-use std::ops::{Div, Rem};
+#![no_std]
+
+use core::ops::{Div, Rem};
 
 macro_rules! strength_reduced_impl {
     ($struct_name:ident, $primitive_type:ident, $intermediate_type:ident, $bit_width:expr) => (
@@ -214,8 +216,9 @@ mod unit_tests {
         ($test_name:ident, $struct_name:ident, $primitive_type:ident) => (
             #[test]
             fn $test_name() {
-                let divisors: Vec<$primitive_type> =   (1..20).chain([std::$primitive_type::MAX - 1, std::$primitive_type::MAX].iter().map(|item| *item)).collect();
-                let numerators: Vec<$primitive_type> = (0..20).chain([std::$primitive_type::MAX - 1, std::$primitive_type::MAX].iter().map(|item| *item)).collect();
+                let max = core::$primitive_type::MAX;
+                let divisors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,max-1,max];
+                let numerators = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,max-1,max];
 
                 for &divisor in &divisors {
                     let reduced_divisor = $struct_name::new(divisor);
