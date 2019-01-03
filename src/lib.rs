@@ -31,6 +31,12 @@
 //! **always** faster than naive division or modulo, even when not used inside a loop.
 //! For u64, it's slower if it's only used a few times, due to nontrivial setup costs, with a break-even point around 10-20.
 //!
+//! For divisors that are known at compile-time, the compiler is already capable of performing arithmetic strength reduction.
+//! But if the divisor is only known at runtime, the compiler cannot optimize away the division. `strength_reduce` is designed
+//! for situations where the divisor is not known until runtime.
+//! 
+//! `strength_reduce` is `#![no_std]`
+//!
 //! The optimizations that this library provides are inherently dependent on architecture, compiler, and platform,
 //! so test before you use. 
 #![no_std]

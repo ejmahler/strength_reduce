@@ -6,9 +6,12 @@
 
 Faster integer division and modulus operations.
 
-`strength_reduce` uses arithmetic strength reduction to transform divisions into multiplications and shifts. This yields a 5x-10x speedup for integer division and modulo operations, with a small amortized setup cost.
+`strength_reduce` uses arithmetic strength reduction to transform divisions into multiplications and shifts.
+When the divisor is not known at compile time, this yields a 5x-10x speedup for integer division and modulo operations,
+with a small amortized setup cost.
 
-Although this library can speed up any division or modulo operation, it's intended for hot loops like the example below, where a division is repeated hundreds of times in a loop, but the divisor remains unchanged.
+Although this library can speed up any division or modulo operation, it's intended for hot loops like the example below,
+where a division is repeated hundreds of times in a loop, but the divisor remains unchanged.
 
 `strength_reduce` is `#![no_std]`
 
