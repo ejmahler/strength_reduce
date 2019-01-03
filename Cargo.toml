@@ -9,5 +9,5 @@ license = "MIT OR Apache-2.0"
 
 repository = "http://github.com/ejmahler/strength_reduce"
 documentation = "http://docs.rs/strength_reduce"
-keywords = ["arithmetic", "strength", "reduction", "division" "modulus"]
+keywords = ["arithmetic", "strength", "reduction", "division", "modulus"]
 categories = ["algorithms", "data-structures"]
