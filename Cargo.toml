@@ -1,0 +1,7 @@
+[package]
+name = "strength_reduction"
+version = "0.1.0"
+authors = ["Elliott Mahler <join.together@gmail.com>"]
+edition = "2018"
+
+[dependencies]
