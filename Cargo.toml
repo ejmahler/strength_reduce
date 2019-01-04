@@ -12,3 +12,6 @@ documentation = "http://docs.rs/strength_reduce"
 keywords = ["arithmetic", "strength", "reduction", "division", "modulus"]
 categories = ["algorithms", "data-structures"]
 readme = "README.md"
+
+[dev-dependencies]
+proptest = "0.8.7"
