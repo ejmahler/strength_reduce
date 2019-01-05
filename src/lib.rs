@@ -27,9 +27,9 @@
 //! A division is repeated hundreds of times in a loop, but the divisor remains unchanged. In these cases,
 //! strength-reduced division and modulo are 5x-10x faster than naive division and modulo.
 //!
-//! Benchmarking suggests that for u8, u16, and u32, on a x64 windows PC, using StrengthReducedU## is
-//! **always** faster than naive division or modulo, even when not used inside a loop.
-//! For u64, it's slower if it's only used a few times, due to nontrivial setup costs, with a break-even point around 10-20.
+//! There is a setup cost associated with creating stength-reduced division instances,
+//! so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case,
+//! but appears to typically be around 5-10 for u8-u32, and 30-40 for u64.
 //!
 //! For divisors that are known at compile-time, the compiler is already capable of performing arithmetic strength reduction.
 //! But if the divisor is only known at runtime, the compiler cannot optimize away the division. `strength_reduce` is designed

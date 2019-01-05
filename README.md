@@ -10,8 +10,7 @@ Faster integer division and modulus operations.
 When the divisor is not known at compile time, this yields a 5x-10x speedup for integer division and modulo operations,
 with a small amortized setup cost.
 
-Although this library can speed up any division or modulo operation, it's intended for hot loops like the example below,
-where a division is repeated hundreds of times in a loop, but the divisor remains unchanged.
+This library is intended for hot loops like the example below, where a division is repeated hundreds of times in a loop, but the divisor remains unchanged. There is a setup cost associated with creating stength-reduced division instances, so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case, but appears to typically be around 5-10 for u8-u32, and 30-40 for u64.
 
 `strength_reduce` is `#![no_std]`
 
@@ -37,6 +36,12 @@ for element in &mut my_array {
     *element = (*element / reduced_divisor) % reduced_modulo;
 }
 ```
+
+## Testing
+
+`strength_reduce` uses `proptest` to generate test cases. In addition, the `u8` and `u16` problem spaces are small enough that we can exhaustively test every possible combination of numerator and divisor.
+However, the `u16` exhaustive test takes several minutes to run, so it is marked `#[ignore]`. Before submitting pull requests, please test with `cargo test -- --ignored` at least once.
+
 ## Compatibility
 
 The `strength_reduce` crate requires rustc 1.26 or greater.

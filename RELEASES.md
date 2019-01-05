@@ -1,4 +1,10 @@
-# Release 0.2 (2019-01-03)
+# Release 0.2.1 (2019-01-04)
+
+### Fixes
+
+- Fixed a class of bugs for certain divisors with very large numerators, where the returned quotient was off by one.
+
+# Release 0.2.0 (2019-01-03)
 
 ### Breaking Changes
 
