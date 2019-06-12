@@ -43,6 +43,8 @@
 
 use core::ops::{Div, Rem};
 
+mod long_division;
+
 /// Implements unsigned division and modulo via mutiplication and shifts.
 ///
 /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
@@ -322,7 +324,7 @@ macro_rules! strength_reduced_u64 {
                 if divisor.is_power_of_two() { 
                     Self{ multiplier: 0, divisor }
                 } else {
-                    let divided = core::u128::MAX / divisor as u128;
+                    let divided = long_division::divide_128_max(divisor as u64);
                     Self{ multiplier: divided + 1, divisor }
                 }
             }
