@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate proptest;
 extern crate strength_reduce;
-extern crate num_integer;
 
 use proptest::test_runner::Config;
 use strength_reduce::{StrengthReducedU8, StrengthReducedU16, StrengthReducedU32, StrengthReducedU64, StrengthReducedUsize};
