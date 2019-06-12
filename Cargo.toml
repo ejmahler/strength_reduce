@@ -1,6 +1,6 @@
 [package]
 name = "strength_reduce"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Elliott Mahler <join.together@gmail.com>"]
 
 description = "Faster integer division and modulus operations"
