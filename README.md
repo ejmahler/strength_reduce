@@ -4,13 +4,14 @@
 [![documentation](https://docs.rs/strength_reduce/badge.svg)](https://docs.rs/strength_reduce/)
 ![minimum rustc 1.26](https://img.shields.io/badge/rustc-1.26+-red.svg)
 
-Faster integer division and modulus operations.
+`strength_reduce` implements integer division and modulo via "arithmetic strength reduction".
 
-`strength_reduce` uses arithmetic strength reduction to transform divisions into multiplications and shifts.
-When the divisor is not known at compile time, this yields a 5x-10x speedup for integer division and modulo operations,
-with a small amortized setup cost.
+Modern processors can do multiplication and shifts much faster than division, and "arithmetic strength reduction" is an algorithm to transform divisions into multiplications and shifts.
+ompilers already perform this optimization for divisors that are known at compile time; this library enables this optimization for divisors that are only known at runtime.
 
-This library is intended for hot loops like the example below, where a division is repeated hundreds of times in a loop, but the divisor remains unchanged. There is a setup cost associated with creating stength-reduced division instances, so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case, but appears to typically be around 5-10 for u8-u32, and 30-40 for u64.
+Benchmarking shows a 5-10x speedup or integer division and modulo operations.
+
+This library is intended for hot loops like the example below, where a division is repeated many times in a loop with the divisor remaining unchanged. There is a setup cost associated with creating stength-reduced division instances, so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case, but is typically low: Benchmarking has shown that takes 3 to 4 repeated divisions with the same StengthReduced## instance to be worth it.
 
 `strength_reduce` is `#![no_std]`
 

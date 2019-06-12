@@ -1,3 +1,10 @@
+# Release 0.2.2 (2019-06-12)
+
+### Changes
+
+- Rewrote the strength reduction algorithm to require less code and less branching.
+- Significantly reduced the setup cost of StrengthReducedU64. It now breaks even at 3-4 divisions, instead of 30-40.
+
 # Release 0.2.1 (2019-01-04)
 
 ### Fixes

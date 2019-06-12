@@ -1,6 +1,9 @@
 //! `strength_reduce` implements integer division and modulo via "arithmetic strength reduction"
 //!
-//! This results in much better performance when computing repeated divisions or modulos.
+//! Modern processors can do multiplication and shifts much faster than division, and "arithmetic strength reduction" is an algorithm to transform divisions into multiplications and shifts.
+//! Compilers already perform this optimization for divisors that are known at compile time; this library enables this optimization for divisors that are only known at runtime.
+//!
+//! Benchmarking shows a 5-10x speedup or integer division and modulo operations.
 //!
 //! # Example:
 //! ```
@@ -23,17 +26,9 @@
 //! }
 //! ```
 //!
-//! The intended use case for StrengthReducedU## is for use in hot loops like the one in the example above:
-//! A division is repeated hundreds of times in a loop, but the divisor remains unchanged. In these cases,
-//! strength-reduced division and modulo are 5x-10x faster than naive division and modulo.
-//!
-//! There is a setup cost associated with creating stength-reduced division instances,
-//! so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case,
-//! but appears to typically be around 5-10 for u8-u32, and 30-40 for u64.
-//!
-//! For divisors that are known at compile-time, the compiler is already capable of performing arithmetic strength reduction.
-//! But if the divisor is only known at runtime, the compiler cannot optimize away the division. `strength_reduce` is designed
-//! for situations where the divisor is not known until runtime.
+//! This library is intended for hot loops like the example above, where a division is repeated many times in a loop with the divisor remaining unchanged. 
+//! There is a setup cost associated with creating stength-reduced division instances, so using strength-reduced division for 1-2 divisions is not worth the setup cost.
+//! The break-even point differs by use-case, but is typically low: Benchmarking has shown that takes 3 to 4 repeated divisions with the same StengthReduced## instance to be worth it.
 //! 
 //! `strength_reduce` is `#![no_std]`
 //!
