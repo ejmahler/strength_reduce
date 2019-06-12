@@ -43,34 +43,96 @@
 
 use core::ops::{Div, Rem};
 
+/// Implements unsigned division and modulo via mutiplication and shifts.
+///
+/// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
+/// this version will be several times faster than naive division.
 #[derive(Clone, Copy, Debug)]
-enum UnsignedDivisionAlgorithm {
-    // Shift the numerator, but don't do anything else to it. Used for powers of two.
-    ShiftOnly,
-
-    // Multiply the numerator, then shift it
-    MutiplyAndShift,
-
-    // Same as MiltiplyAndShift, except there is an implicit added bit that's been truncated off of the multiplier
-    // (Example: for u8, this says the multiplier is treated like 9 bits, where the MSB is 1 but has been truncated)
-    // For some divisors, the primitive type sadly doesn't have enough bits to store the multiplier
-    ExtraMultiplyBit,
+pub struct StrengthReducedU8 {
+    multiplier: u16,
+    divisor: u8,
 }
-use UnsignedDivisionAlgorithm::*;
+impl StrengthReducedU8 {
+    /// Creates a new divisor instance.
+    ///
+    /// If possible, avoid calling new() from an inner loop: The intended usage is to create an instance of this struct outside the loop, and use it for divison and remainders inside the loop.
+    ///
+    /// # Panics:
+    /// 
+    /// Panics if `divisor` is 0
+    #[inline]
+    pub fn new(divisor: u8) -> Self {
+        assert!(divisor > 0);
+
+        if divisor.is_power_of_two() { 
+            Self{ multiplier: 0, divisor }
+        } else {
+            let divided = core::u16::MAX / (divisor as u16);
+            Self{ multiplier: divided + 1, divisor }
+        }
+    }
+
+    /// Simultaneous truncated integer division and modulus.
+    /// Returns `(quotient, remainder)`.
+    #[inline]
+    pub fn div_rem(numerator: u8, denom: Self) -> (u8, u8) {
+        let quotient = numerator / denom;
+        let remainder = numerator % denom;
+        (quotient, remainder)
+    }
+
+    /// Retrieve the value used to create this struct
+    #[inline]
+    pub fn get(&self) -> u8 {
+        self.divisor
+    }
+}
+
+impl Div<StrengthReducedU8> for u8 {
+    type Output = u8;
+
+    #[inline]
+    fn div(self, rhs: StrengthReducedU8) -> Self::Output {
+        if rhs.multiplier == 0 {
+            (self as u16 >> rhs.divisor.trailing_zeros()) as u8
+        } else {
+            let numerator = self as u16;
+            let multiplied_hi = numerator * (rhs.multiplier >> 8);
+            let multiplied_lo = (numerator * rhs.multiplier as u8 as u16) >> 8;
+
+            ((multiplied_hi + multiplied_lo) >> 8) as u8
+        }
+    }
+}
+
+impl Rem<StrengthReducedU8> for u8 {
+    type Output = u8;
+
+    #[inline]
+    fn rem(self, rhs: StrengthReducedU8) -> Self::Output {
+        if rhs.multiplier == 0 {
+            self & (rhs.divisor - 1)
+        } else {
+            let product = rhs.multiplier.wrapping_mul(self as u16) as u32;
+            let divisor = rhs.divisor as u32;
+
+            let shifted = (product * divisor) >> 16;
+            shifted as u8
+        }
+    }
+}
 
 // small types prefer to do work in the intermediate type
-macro_rules! strength_reduced_impl_small {
-    ($struct_name:ident, $primitive_type:ident, $intermediate_type:ident, $bit_width:expr) => (
+macro_rules! strength_reduced_u16 {
+    ($struct_name:ident, $primitive_type:ident) => (
         /// Implements unsigned division and modulo via mutiplication and shifts.
         ///
         /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
         /// this version will be several times faster than naive division.
         #[derive(Clone, Copy, Debug)]
         pub struct $struct_name {
-            multiplier: $primitive_type,
+            multiplier: u32,
             divisor: $primitive_type,
-            shift_value: u8,
-            algorithm: UnsignedDivisionAlgorithm,
         }
         impl $struct_name {
             /// Creates a new divisor instance.
@@ -84,46 +146,11 @@ macro_rules! strength_reduced_impl_small {
             pub fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
 
-                // it will simplify the rest of this method if we have a div_rem that takes intermediate types, and returns primitive types
-                let div_rem = |numerator: $intermediate_type, denominator: $intermediate_type| {
-                    let quotient = numerator / denominator;
-                    let remainder = numerator - quotient * denominator;
-                    (quotient as $primitive_type, remainder as $primitive_type)
-                };
-
-                
                 if divisor.is_power_of_two() { 
-                    Self{ multiplier: 1, divisor, shift_value: divisor.trailing_zeros() as u8, algorithm: ShiftOnly }
+                    Self{ multiplier: 0, divisor }
                 } else {
-                    let shift_size = $bit_width - divisor.leading_zeros() - 1;
-
-                    // to determine our multiplier, we're going to divide a big power of 2 by our divisor
-                    let (multiplier, remainder) = div_rem(1 << (shift_size + $bit_width), divisor as $intermediate_type);
-                    
-                    // Before we commit to using this multiplier and shift value, check the remainder of the division we used to get our multiplier.
-                    // For some divisors, this multiplier won't be big enough, and the remainder will tell us if that's happened
-                    let error = divisor - remainder;
-                    if error >= (1 << shift_size) {
-                        // we've found a case where the multiplier isn't big enough (ie it doesn't have enough precision). if we proceed with it as shown,
-                        // we will get numerators in the upper half of the space (ie, for u8, we'll get numerators > 127) where the quotient is off by one from the correct value
-                        // We can double the multiplier for extra precision, but this will cause the multiplier to wrap.
-                        // so we're going to use the ExtraMultiplyBit enum value to make it clear that our multiplier has wrapped
-                        Self {
-                            multiplier: multiplier.wrapping_shl(1) + 1,
-                            divisor,
-                            shift_value: shift_size as u8 + 1,
-                            algorithm: ExtraMultiplyBit,
-                        }
-                    }
-                    else {
-                        // we're satisfied that the multiplier has enough precision
-                        Self {
-                            multiplier: multiplier + 1,
-                            divisor,
-                            shift_value: (shift_size + $bit_width) as u8,
-                            algorithm: MutiplyAndShift,
-                        }
-                    }
+                    let divided = core::u32::MAX / (divisor as u32);
+                    Self{ multiplier: divided + 1, divisor }
                 }
             }
 
@@ -148,24 +175,14 @@ macro_rules! strength_reduced_impl_small {
 
             #[inline]
             fn div(self, rhs: $struct_name) -> Self::Output {
-                match rhs.algorithm {
-                    ShiftOnly => self >> rhs.shift_value,
-                    MutiplyAndShift => {
-                        let multiplied = (self as $intermediate_type) * (rhs.multiplier as $intermediate_type);
-                        (multiplied >> rhs.shift_value) as $primitive_type
-                    },
-                    ExtraMultiplyBit => {
-                        let multiplied = (self as $intermediate_type) * (rhs.multiplier as $intermediate_type);
-                        let upper_product = multiplied >> $bit_width;
+                if rhs.multiplier == 0 {
+                    self >> rhs.divisor.trailing_zeros()
+                } else {
+                    let numerator = self as u32;
+                    let multiplied_hi = numerator * (rhs.multiplier >> 16);
+                    let multiplied_lo = (numerator * rhs.multiplier as u16 as u32) >> 16;
 
-                        // note that the multiplier is wrapped -- so for u8, if rhs.multiplier is 37, then we're actually multiplying by (256 + 37)
-                        // IE, we're doing 256 * numerator + 37 * numerator
-                        // But since we immediately shift right by the bit width, which in this example is 8, we shift out the multiply by 256
-                        // So we're left with numerator + (37 * numerator) >> bit_width). aka numerator + upper_product
-                        // We have to make sure we do this addition in the intermediate type, because it could overflow the smaller type
-                        let shifted = (self as $intermediate_type + upper_product) >> rhs.shift_value;
-                        shifted as $primitive_type
-                    },
+                    ((multiplied_hi + multiplied_lo) >> 16) as $primitive_type
                 }
             }
         }
@@ -175,25 +192,28 @@ macro_rules! strength_reduced_impl_small {
 
             #[inline]
             fn rem(self, rhs: $struct_name) -> Self::Output {
-                let quotient = self / rhs;
-                self - quotient * rhs.divisor
+                if rhs.multiplier == 0 {
+                    self & (rhs.divisor - 1)
+                } else {
+                    let quotient = self / rhs;
+                    self - quotient * rhs.divisor
+                }
             }
         }
     )
 }
 
-macro_rules! strength_reduced_impl {
-    ($struct_name:ident, $primitive_type:ident, $intermediate_type:ident, $bit_width:expr) => (
+// small types prefer to do work in the intermediate type
+macro_rules! strength_reduced_u32 {
+    ($struct_name:ident, $primitive_type:ident) => (
         /// Implements unsigned division and modulo via mutiplication and shifts.
         ///
         /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
         /// this version will be several times faster than naive division.
         #[derive(Clone, Copy, Debug)]
         pub struct $struct_name {
-            multiplier: $primitive_type,
+            multiplier: u64,
             divisor: $primitive_type,
-            shift_value: u8,
-            algorithm: UnsignedDivisionAlgorithm,
         }
         impl $struct_name {
             /// Creates a new divisor instance.
@@ -207,46 +227,11 @@ macro_rules! strength_reduced_impl {
             pub fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
 
-                // it will simplify the rest of this method if we have a div_rem that takes intermediate types, and returns primitive types
-                let div_rem = |numerator: $intermediate_type, denominator: $intermediate_type| {
-                    let quotient = numerator / denominator;
-                    let remainder = numerator - quotient * denominator;
-                    (quotient as $primitive_type, remainder as $primitive_type)
-                };
-
-                
                 if divisor.is_power_of_two() { 
-                    Self{ multiplier: 1, divisor, shift_value: divisor.trailing_zeros() as u8, algorithm: ShiftOnly }
+                    Self{ multiplier: 0, divisor }
                 } else {
-                    let shift_size = $bit_width - divisor.leading_zeros() - 1;
-
-                    // to determine our multiplier, we're going to divide a big power of 2 by our divisor
-                    let (multiplier, remainder) = div_rem(1 << (shift_size + $bit_width), divisor as $intermediate_type);
-                    
-                    // Before we commit to using this multiplier and shift value, check the remainder of the division we used to get our multiplier.
-                    // For some divisors, this multiplier won't be big enough, and the remainder will tell us if that's happened
-                    let error = divisor - remainder;
-                    if error >= (1 << shift_size) {
-                        // we've found a case where the multiplier isn't big enough (ie it doesn't have enough precision). if we proceed with it as shown,
-                        // we will get numerators in the upper half of the space (ie, for u8, we'll get numerators > 127) where the quotient is off by one from the correct value
-                        // We can double the multiplier for extra precision, but this will cause the multiplier to wrap.
-                        // so we're going to use the ExtraMultiplyBit enum value to make it clear that our multiplier has wrapped
-                        Self {
-                            multiplier: multiplier.wrapping_shl(1) + 1,
-                            divisor,
-                            shift_value: shift_size as u8,
-                            algorithm: ExtraMultiplyBit,
-                        }
-                    }
-                    else {
-                        // we're satisfied that the multiplier has enough precision
-                        Self {
-                            multiplier: multiplier + 1,
-                            divisor,
-                            shift_value: shift_size as u8,
-                            algorithm: MutiplyAndShift,
-                        }
-                    }
+                    let divided = core::u64::MAX / (divisor as u64);
+                    Self{ multiplier: divided + 1, divisor }
                 }
             }
 
@@ -254,9 +239,18 @@ macro_rules! strength_reduced_impl {
             /// Returns `(quotient, remainder)`.
             #[inline]
             pub fn div_rem(numerator: $primitive_type, denom: Self) -> ($primitive_type, $primitive_type) {
-                let quotient = numerator / denom;
-                let remainder = numerator - quotient * denom.divisor;
-                (quotient, remainder)
+                if denom.multiplier == 0 {
+                    (numerator >> denom.divisor.trailing_zeros(), numerator & (denom.divisor - 1))
+                }
+                else {
+                    let numerator64 = numerator as u64;
+                    let multiplied_hi = numerator64 * (denom.multiplier >> 32);
+                    let multiplied_lo = numerator64 * (denom.multiplier as u32 as u64) >> 32;
+
+                    let quotient = ((multiplied_hi + multiplied_lo) >> 32) as $primitive_type;
+                    let remainder = numerator - quotient * denom.divisor;
+                    (quotient, remainder)
+                }
             }
 
             /// Retrieve the value used to create this struct
@@ -271,27 +265,14 @@ macro_rules! strength_reduced_impl {
 
             #[inline]
             fn div(self, rhs: $struct_name) -> Self::Output {
-                match rhs.algorithm {
-                    ShiftOnly => self >> rhs.shift_value,
-                    MutiplyAndShift => {
-                        let multiplied = (self as $intermediate_type) * (rhs.multiplier as $intermediate_type);
-                        let upper_product = (multiplied >> $bit_width) as $primitive_type;
-                        upper_product >> rhs.shift_value
-                    },
-                    ExtraMultiplyBit => {
-                        let multiplied = (self as $intermediate_type) * (rhs.multiplier as $intermediate_type);
-                        let upper_product = (multiplied >> $bit_width) as $primitive_type;
+                if rhs.multiplier == 0 {
+                    self >> rhs.divisor.trailing_zeros()
+                } else {
+                    let numerator = self as u64;
+                    let multiplied_hi = numerator * (rhs.multiplier >> 32);
+                    let multiplied_lo = numerator * (rhs.multiplier as u32 as u64) >> 32;
 
-                        // note that the multiplier is wrapped -- so for u8, if rhs.multiplier is 37, then we're actually multiplying by (256 + 37)
-                        // IE in this example we're doing 256 * numerator + 37 * numerator
-                        // But since we immediately shift right by the bit width, we get, in the u8 example, (256 * numerator + 37 * numerator) / 256
-                        // So we're left with numerator + (37 * numerator) >> bit_width). aka numerator + upper_product
-                        // Unfortunately, if we just add numerator and upper_product, we might overflow. One solution is to divide by 2 before shifting, and then shift one less.
-                        // It turns out that upper_product + (numerator - upper_product) / 2 is equivalent to (upper_product + numerator) / 2, but doesn't overflow!
-                        // So we divide by 2 here, and to compensate, we shift one less than normal (shifting one less is handled in the constructor)
-                        let half_difference = (self - upper_product) / 2;
-                        (upper_product + half_difference) >> rhs.shift_value
-                    }
+                    ((multiplied_hi + multiplied_lo) >> 32) as $primitive_type
                 }
             }
         }
@@ -301,27 +282,120 @@ macro_rules! strength_reduced_impl {
 
             #[inline]
             fn rem(self, rhs: $struct_name) -> Self::Output {
-                let quotient = self / rhs;
-                self - quotient * rhs.divisor
+                if rhs.multiplier == 0 {
+                    self & (rhs.divisor - 1)
+                } else {
+                    let product = rhs.multiplier.wrapping_mul(self as u64) as u128;
+                    let divisor = rhs.divisor as u128;
+
+                    let shifted = (product * divisor) >> 64;
+                    shifted as $primitive_type
+                }
             }
         }
     )
 }
 
-// u8 appears to be much faster strength_reduced_impl_small -- u16 sppears to be marginally faster with strength_reduced_impl, and the others are significantly faster with strength_reduced_impl
-strength_reduced_impl_small!(StrengthReducedU8, u8, u16, 8);
-strength_reduced_impl!(StrengthReducedU16, u16, u32, 16);
-strength_reduced_impl!(StrengthReducedU32, u32, u64, 32);
-strength_reduced_impl!(StrengthReducedU64, u64, u128, 64);
+macro_rules! strength_reduced_u64 {
+    ($struct_name:ident, $primitive_type:ident) => (
+        /// Implements unsigned division and modulo via mutiplication and shifts.
+        ///
+        /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
+        /// this version will be several times faster than naive division.
+        #[derive(Clone, Copy, Debug)]
+        pub struct $struct_name {
+            multiplier: u128,
+            divisor: $primitive_type,
+        }
+        impl $struct_name {
+            /// Creates a new divisor instance.
+            ///
+            /// If possible, avoid calling new() from an inner loop: The intended usage is to create an instance of this struct outside the loop, and use it for divison and remainders inside the loop.
+            ///
+            /// # Panics:
+            /// 
+            /// Panics if `divisor` is 0
+            #[inline]
+            pub fn new(divisor: $primitive_type) -> Self {
+                assert!(divisor > 0);
+
+                if divisor.is_power_of_two() { 
+                    Self{ multiplier: 0, divisor }
+                } else {
+                    let divided = core::u128::MAX / divisor as u128;
+                    Self{ multiplier: divided + 1, divisor }
+                }
+            }
+            /// Simultaneous truncated integer division and modulus.
+            /// Returns `(quotient, remainder)`.
+            #[inline]
+            pub fn div_rem(numerator: $primitive_type, denom: Self) -> ($primitive_type, $primitive_type) {
+                if denom.multiplier == 0 {
+                    (numerator >> denom.divisor.trailing_zeros(), numerator & (denom.divisor - 1))
+                }
+                else {
+                    let numerator128 = numerator as u128;
+                    let multiplied_hi = numerator128 * (denom.multiplier >> 64);
+                    let multiplied_lo = numerator128 * (denom.multiplier as u64 as u128) >> 64;
+
+                    let quotient = ((multiplied_hi + multiplied_lo) >> 64) as $primitive_type;
+                    let remainder = numerator - quotient * denom.divisor;
+                    (quotient, remainder)
+                }
+            }
+
+            /// Retrieve the value used to create this struct
+            #[inline]
+            pub fn get(&self) -> $primitive_type {
+                self.divisor
+            }
+        }
+
+        impl Div<$struct_name> for $primitive_type {
+            type Output = $primitive_type;
+
+            #[inline]
+            fn div(self, rhs: $struct_name) -> Self::Output {
+                if rhs.multiplier == 0 {
+                    self >> rhs.divisor.trailing_zeros()
+                } else {
+                    let numerator = self as u128;
+                    let multiplied_hi = numerator * (rhs.multiplier >> 64);
+                    let multiplied_lo = numerator * (rhs.multiplier as u64 as u128) >> 64;
+
+                    ((multiplied_hi + multiplied_lo) >> 64) as $primitive_type
+                }
+            }
+        }
+
+        impl Rem<$struct_name> for $primitive_type {
+            type Output = $primitive_type;
+
+            #[inline]
+            fn rem(self, rhs: $struct_name) -> Self::Output {
+                if rhs.multiplier == 0 {
+                    self & (rhs.divisor - 1)
+                } else {
+                    let quotient = self / rhs;
+                    self - quotient * rhs.divisor
+                }
+            }
+        }
+    )
+}
+
+// We just hardcoded u8, since it will never be a usize. for therest, we have macros, so we can reuse the same code for usize
+strength_reduced_u16!(StrengthReducedU16, u16);
+strength_reduced_u32!(StrengthReducedU32, u32);
+strength_reduced_u64!(StrengthReducedU64, u64);
 
 // Our definition for usize will depend on how big usize is
 #[cfg(target_pointer_width = "16")]
-strength_reduced_impl!(StrengthReducedUsize, usize, u32, 16);
+strength_reduced_u16!(StrengthReducedUsize, usize);
 #[cfg(target_pointer_width = "32")]
-strength_reduced_impl!(StrengthReducedUsize, usize, u64, 32);
+strength_reduced_u32!(StrengthReducedUsize, usize);
 #[cfg(target_pointer_width = "64")]
-strength_reduced_impl!(StrengthReducedUsize, usize, u128, 64);
-
+strength_reduced_u64!(StrengthReducedUsize, usize);
 
 
 
