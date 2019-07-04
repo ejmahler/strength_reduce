@@ -39,6 +39,7 @@
 use core::ops::{Div, Rem};
 
 mod long_division;
+mod long_multiplication;
 
 /// Implements unsigned division and modulo via mutiplication and shifts.
 ///
@@ -473,7 +474,7 @@ impl StrengthReducedU128 {
     #[inline]
     pub fn div_rem(numerator: u128, denom: Self) -> (u128, u128) {
         let quotient = numerator / denom;
-        let remainder = numerator % denom;
+        let remainder = numerator - quotient * denom.divisor;
         (quotient, remainder)
     }
 
@@ -492,23 +493,7 @@ impl Div<StrengthReducedU128> for u128 {
         if rhs.multiplier_hi == 0 {
             self >> rhs.divisor.trailing_zeros()
         } else {
-            // Split the numerator into hi and lo components, each 64 bits wide, least significant bits to least significant bits
-            let numerator = [
-                self as u64,
-                (self >> 64) as u64
-            ];
-
-            // split the multiplier into 4 components, each 64 bits wide, least significant bits to most significant bits
-            let multiplier = [
-                rhs.multiplier_lo as u64,
-                (rhs.multiplier_lo >> 64) as u64,
-                rhs.multiplier_hi as u64,
-                (rhs.multiplier_hi >> 64) as u64,
-            ];
-
-            let result_array = big_multiply(&multiplier, &numerator);
-
-            (result_array[4] as u128) | ((result_array[5] as u128) << 64)
+            long_multiplication::multiply_256_by_128_upperbits(rhs.multiplier_hi, rhs.multiplier_lo, self)
         }
     }
 }
@@ -521,30 +506,8 @@ impl Rem<StrengthReducedU128> for u128 {
         if rhs.multiplier_hi == 0 {
             self & (rhs.divisor - 1)
         } else {
-             // Split the numerator into hi and lo components, each 64 bits wide, least significant bits to least significant bits
-            let numerator = [
-                self as u64,
-                (self >> 64) as u64
-            ];
-
-            let multiplier = [
-                rhs.multiplier_lo as u64,
-                (rhs.multiplier_lo >> 64) as u64,
-                rhs.multiplier_hi as u64,
-                (rhs.multiplier_hi >> 64) as u64,
-            ];
-
-
-            let first_product = big_multiply_wrapped(&multiplier, &numerator);
-
-            let divisor = [
-                rhs.divisor as u64,
-                (rhs.divisor >> 64) as u64
-            ];
-
-            let second_product = big_multiply(&first_product, &divisor);
-
-            (second_product[4] as u128) | ((second_product[5] as u128) << 64)
+             let quotient = long_multiplication::multiply_256_by_128_upperbits(rhs.multiplier_hi, rhs.multiplier_lo, self);
+             self - quotient * rhs.divisor
         }
     }
 }
@@ -571,8 +534,8 @@ mod unit_tests {
             #[test]
             fn $test_name() {
                 let max = core::$primitive_type::MAX;
-                let divisors = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,max-1,max];
-                let numerators = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,max-1,max];
+                let divisors = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,max-1,max];
+                let numerators = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
 
                 for &divisor in &divisors {
                     let reduced_divisor = $struct_name::new(divisor);
@@ -581,6 +544,11 @@ mod unit_tests {
                         let expected_rem = numerator % divisor;
 
                         let reduced_div = numerator / reduced_divisor;
+
+                        println!("actual   {:128b}", reduced_div);
+                        println!("expected {:128b}", expected_div);
+
+
                         assert_eq!(expected_div, reduced_div, "Divide failed with numerator: {}, divisor: {}", numerator, divisor);
                         let reduced_rem = numerator % reduced_divisor;
 
