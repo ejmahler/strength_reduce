@@ -319,8 +319,8 @@ macro_rules! strength_reduced_u64 {
                 if divisor.is_power_of_two() { 
                     Self{ multiplier: 0, divisor }
                 } else {
-                    let divided = long_division::divide_128_max(divisor as u64);
-                    Self{ multiplier: divided + 1, divisor }
+                    let quotient = long_division::divide_128(core::u128::MAX, divisor as u128);
+                    Self{ multiplier: quotient + 1, divisor }
                 }
             }
             /// Simultaneous truncated integer division and modulus.
@@ -381,7 +381,175 @@ macro_rules! strength_reduced_u64 {
     )
 }
 
-// We just hardcoded u8, since it will never be a usize. for therest, we have macros, so we can reuse the same code for usize
+// multply the 256-bit number a by the 128-bit number b, return the 384-bit product
+#[inline]
+pub fn big_multiply(a: &[u64; 4], b: &[u64; 2]) -> [u64; 6] {
+    let mut result = [0u64; 6];
+
+    for (a_index, &a_component) in a.iter().enumerate() {
+        for (b_index, &b_component) in b.iter().enumerate() {
+            let product = (a_component as u128) * (b_component as u128);
+            let product_array = [product as u64, (product >> 64) as u64];
+
+            for (product_index, &product_component) in product_array.iter().enumerate() {
+                let mut index = a_index + b_index + product_index;
+                let mut remaining_product = product_component;
+
+                while remaining_product > 0 && index < result.len() {
+                    let (sum, carry) = result[index].overflowing_add(remaining_product);
+                    result[index] = sum;
+
+                    remaining_product = if carry { 1 } else { 0 };
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    result
+}
+
+// multply the 256-bit number a by the 128-bit number b, return the lower 256 bits of the product
+#[inline]
+pub fn big_multiply_wrapped(a: &[u64; 4], b: &[u64; 2]) -> [u64; 4] {
+    let mut result = [0u64; 4];
+
+    for (a_index, &a_component) in a.iter().enumerate() {
+        for (b_index, &b_component) in b.iter().enumerate() {
+            let product = (a_component as u128) * (b_component as u128);
+            let product_array = [product as u64, (product >> 64) as u64];
+
+            for (product_index, &product_component) in product_array.iter().enumerate() {
+                let mut index = a_index + b_index + product_index;
+                let mut remaining_product = product_component;
+
+                while remaining_product > 0 && index < result.len() {
+                    let (sum, carry) = result[index].overflowing_add(remaining_product);
+                    result[index] = sum;
+
+                    remaining_product = if carry { 1 } else { 0 };
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    result
+}
+/// Implements unsigned division and modulo via mutiplication and shifts.
+///
+/// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
+/// this version will be several times faster than naive division.
+#[derive(Clone, Copy, Debug)]
+pub struct StrengthReducedU128 {
+    multiplier_hi: u128,
+    multiplier_lo: u128,
+    divisor: u128,
+}
+impl StrengthReducedU128 {
+    /// Creates a new divisor instance.
+    ///
+    /// If possible, avoid calling new() from an inner loop: The intended usage is to create an instance of this struct outside the loop, and use it for divison and remainders inside the loop.
+    ///
+    /// # Panics:
+    /// 
+    /// Panics if `divisor` is 0
+    #[inline]
+    pub fn new(divisor: u128) -> Self {
+        assert!(divisor > 0);
+
+        if divisor.is_power_of_two() { 
+            Self{ multiplier_hi: 0, multiplier_lo: 0, divisor }
+        } else {
+            let (quotient_hi, quotient_lo) = long_division::divide_256_by_128(core::u128::MAX, core::u128::MAX, divisor);
+            let multiplier_lo = quotient_lo.wrapping_add(1);
+            let multiplier_hi = if multiplier_lo == 0 { quotient_hi + 1 } else { quotient_hi };
+            Self{ multiplier_hi, multiplier_lo, divisor }
+        }
+    }
+
+    /// Simultaneous truncated integer division and modulus.
+    /// Returns `(quotient, remainder)`.
+    #[inline]
+    pub fn div_rem(numerator: u128, denom: Self) -> (u128, u128) {
+        let quotient = numerator / denom;
+        let remainder = numerator % denom;
+        (quotient, remainder)
+    }
+
+    /// Retrieve the value used to create this struct
+    #[inline]
+    pub fn get(&self) -> u128 {
+        self.divisor
+    }
+}
+
+impl Div<StrengthReducedU128> for u128 {
+    type Output = u128;
+
+    #[inline]
+    fn div(self, rhs: StrengthReducedU128) -> Self::Output {
+        if rhs.multiplier_hi == 0 {
+            self >> rhs.divisor.trailing_zeros()
+        } else {
+            // Split the numerator into hi and lo components, each 64 bits wide, least significant bits to least significant bits
+            let numerator = [
+                self as u64,
+                (self >> 64) as u64
+            ];
+
+            // split the multiplier into 4 components, each 64 bits wide, least significant bits to most significant bits
+            let multiplier = [
+                rhs.multiplier_lo as u64,
+                (rhs.multiplier_lo >> 64) as u64,
+                rhs.multiplier_hi as u64,
+                (rhs.multiplier_hi >> 64) as u64,
+            ];
+
+            let result_array = big_multiply(&multiplier, &numerator);
+
+            (result_array[4] as u128) | ((result_array[5] as u128) << 64)
+        }
+    }
+}
+
+impl Rem<StrengthReducedU128> for u128 {
+    type Output = u128;
+
+    #[inline]
+    fn rem(self, rhs: StrengthReducedU128) -> Self::Output {
+        if rhs.multiplier_hi == 0 {
+            self & (rhs.divisor - 1)
+        } else {
+             // Split the numerator into hi and lo components, each 64 bits wide, least significant bits to least significant bits
+            let numerator = [
+                self as u64,
+                (self >> 64) as u64
+            ];
+
+            let multiplier = [
+                rhs.multiplier_lo as u64,
+                (rhs.multiplier_lo >> 64) as u64,
+                rhs.multiplier_hi as u64,
+                (rhs.multiplier_hi >> 64) as u64,
+            ];
+
+
+            let first_product = big_multiply_wrapped(&multiplier, &numerator);
+
+            let divisor = [
+                rhs.divisor as u64,
+                (rhs.divisor >> 64) as u64
+            ];
+
+            let second_product = big_multiply(&first_product, &divisor);
+
+            (second_product[4] as u128) | ((second_product[5] as u128) << 64)
+        }
+    }
+}
+
+// We just hardcoded u8 and u128 since they will never be a usize. for the rest, we have macros, so we can reuse the same code for usize
 strength_reduced_u16!(StrengthReducedU16, u16);
 strength_reduced_u32!(StrengthReducedU32, u32);
 strength_reduced_u64!(StrengthReducedU64, u64);
@@ -393,8 +561,6 @@ strength_reduced_u16!(StrengthReducedUsize, usize);
 strength_reduced_u32!(StrengthReducedUsize, usize);
 #[cfg(target_pointer_width = "64")]
 strength_reduced_u64!(StrengthReducedUsize, usize);
-
-
 
 #[cfg(test)]
 mod unit_tests {
@@ -435,4 +601,5 @@ mod unit_tests {
     reduction_test!(test_strength_reduced_u32, StrengthReducedU32, u32);
     reduction_test!(test_strength_reduced_u64, StrengthReducedU64, u64);
     reduction_test!(test_strength_reduced_usize, StrengthReducedUsize, usize);
+    reduction_test!(test_strength_reduced_u128, StrengthReducedU128, u128);
 }

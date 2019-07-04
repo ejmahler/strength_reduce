@@ -3,7 +3,7 @@ extern crate proptest;
 extern crate strength_reduce;
 
 use proptest::test_runner::Config;
-use strength_reduce::{StrengthReducedU8, StrengthReducedU16, StrengthReducedU32, StrengthReducedU64, StrengthReducedUsize};
+use strength_reduce::{StrengthReducedU8, StrengthReducedU16, StrengthReducedU32, StrengthReducedU64, StrengthReducedUsize, StrengthReducedU128};
 
 
 macro_rules! reduction_proptest {
@@ -57,6 +57,7 @@ reduction_proptest!(strength_reduced_u16, StrengthReducedU16, u16);
 reduction_proptest!(strength_reduced_u32, StrengthReducedU32, u32);
 reduction_proptest!(strength_reduced_u64, StrengthReducedU64, u64);
 reduction_proptest!(strength_reduced_usize, StrengthReducedUsize, usize);
+reduction_proptest!(strength_reduced_u128, StrengthReducedU128, u128);
 
 macro_rules! exhaustive_test {
     ($test_name:ident, $struct_name:ident, $primitive_type:ident) => (
