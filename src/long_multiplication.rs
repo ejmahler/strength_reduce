@@ -54,3 +54,34 @@ fn multiply_256_by_64_helper(product: &mut [u64], a: &[u64;4], b: u64) {
 		carry >>= 64;
 	}
 }
+
+// product += a * b
+#[inline]
+pub(crate) fn long_multiply(a: &[u64], b: u64, product: &mut [u64]) {
+	if b == 0 {
+		return;
+	}
+
+	let mut carry = 0;
+	let (product_lo, product_hi) = product.split_at_mut(a.len());
+
+	// Multiply each of the digits in a by b, adding them into the 'product' value.
+	// We don't zero out product, because we this will be called multiple times, so it probably contains a previous iteration's partial product, and we're adding + carrying on top of it
+	for (p, &a_digit) in product_lo.iter_mut().zip(a) {
+		carry += *p as u128;
+		carry += (a_digit as u128) * (b as u128);
+
+		*p = carry as u64;
+		carry >>= 64;
+	}
+
+	// We're done multiplying, we just need to finish carrying through the rest of the product.
+	let mut p = product_hi.iter_mut();
+	while carry != 0 {
+		let p = p.next().expect("carry overflow during multiplication!");
+		carry += *p as u128;
+
+		*p = carry as u64;
+		carry >>= 64;
+	}
+}

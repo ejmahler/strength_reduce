@@ -36,6 +36,11 @@
 //! so test before you use. 
 #![no_std]
 
+#[cfg(test)]
+extern crate num_bigint;
+#[cfg(test)]
+extern crate rand;
+
 use core::ops::{Div, Rem};
 
 mod long_division;
@@ -382,61 +387,6 @@ macro_rules! strength_reduced_u64 {
     )
 }
 
-// multply the 256-bit number a by the 128-bit number b, return the 384-bit product
-#[inline]
-pub fn big_multiply(a: &[u64; 4], b: &[u64; 2]) -> [u64; 6] {
-    let mut result = [0u64; 6];
-
-    for (a_index, &a_component) in a.iter().enumerate() {
-        for (b_index, &b_component) in b.iter().enumerate() {
-            let product = (a_component as u128) * (b_component as u128);
-            let product_array = [product as u64, (product >> 64) as u64];
-
-            for (product_index, &product_component) in product_array.iter().enumerate() {
-                let mut index = a_index + b_index + product_index;
-                let mut remaining_product = product_component;
-
-                while remaining_product > 0 && index < result.len() {
-                    let (sum, carry) = result[index].overflowing_add(remaining_product);
-                    result[index] = sum;
-
-                    remaining_product = if carry { 1 } else { 0 };
-                    index += 1;
-                }
-            }
-        }
-    }
-
-    result
-}
-
-// multply the 256-bit number a by the 128-bit number b, return the lower 256 bits of the product
-#[inline]
-pub fn big_multiply_wrapped(a: &[u64; 4], b: &[u64; 2]) -> [u64; 4] {
-    let mut result = [0u64; 4];
-
-    for (a_index, &a_component) in a.iter().enumerate() {
-        for (b_index, &b_component) in b.iter().enumerate() {
-            let product = (a_component as u128) * (b_component as u128);
-            let product_array = [product as u64, (product >> 64) as u64];
-
-            for (product_index, &product_component) in product_array.iter().enumerate() {
-                let mut index = a_index + b_index + product_index;
-                let mut remaining_product = product_component;
-
-                while remaining_product > 0 && index < result.len() {
-                    let (sum, carry) = result[index].overflowing_add(remaining_product);
-                    result[index] = sum;
-
-                    remaining_product = if carry { 1 } else { 0 };
-                    index += 1;
-                }
-            }
-        }
-    }
-
-    result
-}
 /// Implements unsigned division and modulo via mutiplication and shifts.
 ///
 /// Creating a an instance of this struct is more expensive than a single division, but if the division is repeated,
@@ -462,7 +412,7 @@ impl StrengthReducedU128 {
         if divisor.is_power_of_two() { 
             Self{ multiplier_hi: 0, multiplier_lo: 0, divisor }
         } else {
-            let (quotient_hi, quotient_lo) = long_division::divide_256_by_128(core::u128::MAX, core::u128::MAX, divisor);
+            let (quotient_hi, quotient_lo) = long_division::divide_256_max_by_128(divisor);
             let multiplier_lo = quotient_lo.wrapping_add(1);
             let multiplier_hi = if multiplier_lo == 0 { quotient_hi + 1 } else { quotient_hi };
             Self{ multiplier_hi, multiplier_lo, divisor }
@@ -544,10 +494,6 @@ mod unit_tests {
                         let expected_rem = numerator % divisor;
 
                         let reduced_div = numerator / reduced_divisor;
-
-                        println!("actual   {:128b}", reduced_div);
-                        println!("expected {:128b}", expected_div);
-
 
                         assert_eq!(expected_div, reduced_div, "Divide failed with numerator: {}, divisor: {}", numerator, divisor);
                         let reduced_rem = numerator % reduced_divisor;
