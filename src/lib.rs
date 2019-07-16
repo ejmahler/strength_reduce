@@ -325,7 +325,7 @@ macro_rules! strength_reduced_u64 {
                 if divisor.is_power_of_two() { 
                     Self{ multiplier: 0, divisor }
                 } else {
-                    let quotient = long_division::divide_128(core::u128::MAX, divisor as u128);
+                    let quotient = long_division::divide_128_max_by_64(divisor as u64);
                     Self{ multiplier: quotient + 1, divisor }
                 }
             }

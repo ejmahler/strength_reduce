@@ -4,6 +4,86 @@ const U64_MAX: u128 = core::u64::MAX as u128;
 use crate::StrengthReducedU64;
 use crate::long_multiplication;
 
+// divides a 128-bit number by a 64-bit divisor, returning the quotient as a 64-bit number
+// assumes that the divisor and numerator have both already been bit-shifted so that divisor.leading_zeros() == 0
+#[inline]
+fn divide_128_by_64_preshifted(numerator_hi: u64, numerator_lo: u64, divisor: u64) -> u64 {
+    let numerator_mid = (numerator_lo >> 32) as u128;
+    let numerator_lo = numerator_lo as u32 as u128;
+    let divisor_full_128 = divisor as u128;
+    let divisor_hi = divisor >> 32;
+
+    // To get the upper 32 bits of the quotient, we want to divide 'full_upper_numerator' by 'divisor'
+    // but the problem is, full_upper_numerator is a 96-bit number, meaning we would need to use u128 to do the division all at once, and the whole point of this is that we don't want to do 128 bit divison because it's slow
+	// so instead, we'll shift both the numerator and divisor right by 32, giving us a 64 bit / 32 bit division. This won't give us the exact quotient -- but it will be close.
+    let full_upper_numerator = ((numerator_hi as u128) << 32) | numerator_mid;
+    let mut quotient_hi = core::cmp::min(numerator_hi / divisor_hi, U32_MAX);
+    let mut product_hi = quotient_hi as u128 * divisor_full_128;
+
+    // quotient_hi contains our guess at what the quotient is! the problem is that we got this by ignoring the lower 32 bits of the divisor. when we account for that, the quotient might be slightly lower
+    // we will know our quotient is too high if quotient * divisor > numerator. if it is, decrement until it's in range
+    while product_hi > full_upper_numerator {
+        quotient_hi -= 1;
+        product_hi -= divisor_full_128;
+    }
+    let remainder_hi = full_upper_numerator - product_hi;
+
+
+    // repeat the process using the lower half of the numerator
+    let full_lower_numerator = (remainder_hi << 32) | numerator_lo;
+    let mut quotient_lo = core::cmp::min((remainder_hi as u64) / divisor_hi, U32_MAX);
+    let mut product_lo = quotient_lo as u128 * divisor_full_128;
+
+    // again, quotient_lo is just a guess at this point, it might be slightly too large
+    while product_lo > full_lower_numerator {
+        quotient_lo -= 1;
+        product_lo -= divisor_full_128;
+    }
+
+    // We now have our separate quotients, now we just have to add them together
+    (quotient_hi << 32) | quotient_lo
+}
+
+// divides a 128-bit number by a 64-bit divisor, returning the quotient as a 64-bit number
+// assumes that the divisor and numerator have both already been bit-shifted to maximize the number of bits in divisor_hi
+// divisor_hi should be the upper 32 bits, and divisor_lo should be the lower 32 bits
+#[inline]
+fn divide_128_by_64_preshifted_reduced(numerator_hi: u64, numerator_lo: u64, divisor_hi: StrengthReducedU64, divisor_full: u64) -> u64 {
+    let numerator_mid = (numerator_lo >> 32) as u128;
+    let numerator_lo = numerator_lo as u32 as u128;
+    let divisor_full_128 = divisor_full as u128;
+
+    // To get the upper 32 bits of the quotient, we want to divide 'full_upper_numerator' by 'divisor'
+    // but the problem is, full_upper_numerator is a 96-bit number, meaning we would need to use u128 to do the division all at once, and the whole point of this is that we don't want to do 128 bit divison because it's slow
+	// so instead, we'll shift both the numerator and divisor right by 32, giving us a 64 bit / 32 bit division. This won't give us the exact quotient -- but it will be close.
+    let full_upper_numerator = ((numerator_hi as u128) << 32) | numerator_mid;
+    let mut quotient_hi = core::cmp::min(numerator_hi / divisor_hi, U32_MAX);
+    let mut product_hi = quotient_hi as u128 * divisor_full_128;
+
+    // quotient_hi contains our guess at what the quotient is! the problem is that we got this by ignoring the lower 32 bits of the divisor. when we account for that, the quotient might be slightly lower
+    // we will know our quotient is too high if quotient * divisor > numerator. if it is, decrement until it's in range
+    while product_hi > full_upper_numerator {
+        quotient_hi -= 1;
+        product_hi -= divisor_full_128;
+    }
+    let full_upper_remainder = full_upper_numerator - product_hi;
+
+
+    // repeat the process using the lower half of the numerator
+    let full_lower_numerator = (full_upper_remainder << 32) | numerator_lo;
+    let mut quotient_lo = core::cmp::min((full_upper_remainder as u64) / divisor_hi, U32_MAX);
+    let mut product_lo = quotient_lo as u128 * divisor_full_128;
+
+    // again, quotient_lo is just a guess at this point, it might be slightly too large
+    while product_lo > full_lower_numerator {
+        quotient_lo -= 1;
+        product_lo -= divisor_full_128;
+    }
+
+    // We now have our separate quotients, now we just have to add them together
+    (quotient_hi << 32) | quotient_lo
+}
+
 // divides a 128-bit number by a 128-bit divisor
 pub fn divide_128(numerator: u128, divisor: u128) -> u128 {
 	if divisor <= U64_MAX {
@@ -231,6 +311,30 @@ fn sub_assign(a: &mut [u64], b: &[u64]) {
 	}
 }
 
+pub(crate) fn divide_128_max_by_64(divisor: u64) -> u128 {
+	let quotient_hi = core::u64::MAX / divisor;
+	let remainder_hi = core::u64::MAX - quotient_hi * divisor;
+
+	let leading_zeros = divisor.leading_zeros();
+	let quotient_lo = if leading_zeros >= 32 {
+		let numerator_mid = (remainder_hi << 32) | core::u32::MAX as u64;
+		let quotient_mid = numerator_mid / divisor;
+		let remainder_mid = numerator_mid - quotient_mid * divisor;
+
+		let numerator_lo = (remainder_mid << 32) | core::u32::MAX as u64;
+		let quotient_lo = numerator_lo / divisor;
+
+		(quotient_mid << 32) | quotient_lo
+	}
+	else {
+		let numerator_hi = if leading_zeros > 0 { (remainder_hi << leading_zeros) | (core::u64::MAX >> (64 - leading_zeros)) } else { remainder_hi };
+		let numerator_lo = core::u64::MAX << leading_zeros;
+
+		divide_128_by_64_preshifted(numerator_hi, numerator_lo, divisor << leading_zeros)
+	};
+	((quotient_hi as u128) << 64) | (quotient_lo as u128)
+}
+
 fn divide_256_max_by_32(divisor: u32) -> (u128, u128) {
 	let reduced_divisor = StrengthReducedU64::new(divisor as u64);
 	let mut numerator_chunks = [core::u64::MAX; 4];
@@ -242,56 +346,6 @@ fn divide_256_max_by_32(divisor: u32) -> (u128, u128) {
 	let quotient_hi = (quotient_chunks[2] as u128) | ((quotient_chunks[3] as u128) << 64);
 
 	(quotient_hi, quotient_lo)
-}
-
-// divides a 128-bit number by a 64-bit divisor, returning the quotient as a 64-bit number
-// assumes that the divisor and numerator have both already been bit-shifted to maximize the number of bits in divisor_hi
-// divisor_hi should be the upper 32 bits, and divisor_lo should be the lower 32 bits
-fn divide_128_by_64_preshifted(numerator_hi: u64, numerator_lo: u64, divisor_hi: StrengthReducedU64, divisor_full: u64) -> u64 {
-    let numerator_mid = (numerator_lo >> 32) as u128;
-    let numerator_lo = numerator_lo as u32 as u128;
-    let divisor_full_128 = divisor_full as u128;
-
-    // we're essentially going to do a long division algorithm with 2 divisions, one on numerator_hi << 32 | numerator_mid, and the second on the remainder of the first | numerator_lo
-    // but numerator_hi << 32 | numerator_mid is a 96-bit number, and we only have 64 bits to work with. so instead we split the divisor into 2 chunks, and divde by the upper chunk, and then check against the lower chunk in a while loop
-
-    // step 1: divide the top chunk of the numerator by the divisor
-    // IDEALLY, we would divide (numerator_hi << 32) | numerator_mid by shifted_divisor, but that would require a 128-bit numerator, which is the whole thing we're trying to avoid
-    // so instead we're going to split the second division into two sub-phases. in 1a, we divide numerator_hi by divisor_hi, and then in 1b we decrement the quotient to account for the fact that it'll be smaller when you take divisor_lo into account
-
-    // keep in mind that for all of step 2, the full numerator we're using will be
-    // complete_first_numerator  = (numerator_midbits << 32) | numerator_mid
-
-    // step 1a: divide the upper part of the middle numerator by the upper part of the divisor
-    let mut quotient_hi = core::cmp::min(numerator_hi / divisor_hi, U32_MAX);
-    let mut product_hi = quotient_hi as u128 * divisor_full_128;
-
-    // step 1b: we know sort of what the quotient is, but it's slightly too large because it doesn't account for divisor_lo, nor numerator_mid, so decrement the quotient until it fits
-    // note that if we do some algebra on the condition in this while loop,
-    // ie "quotient_hi * divisor_lo > (partial_remainder_hi << 32) | numerator_mid"
-    // we end up getting "quotient_hi * shifted_divisor < (numerator_midbits << 32) | numerator_mid". remember that the right side of the inequality sign is complete_first_numerator from above.
-    // which deminstrates that we're decrementing the quotient until the quotient multipled by the complete divisor is less than the complete numerator
-    let full_upper_numerator = ((numerator_hi as u128) << 32) | numerator_mid;
-    while product_hi > full_upper_numerator {
-        quotient_hi -= 1;
-        product_hi -= divisor_full_128;
-    }
-    let full_upper_remainder = full_upper_numerator - product_hi;
-
-
-    // repeat the process using the lower half of the numerator
-    let full_lower_numerator = (full_upper_remainder << 32) | numerator_lo;
-    let mut quotient_lo = core::cmp::min((full_upper_remainder as u64) / divisor_hi, U32_MAX);
-    let mut product_lo = quotient_lo as u128 * divisor_full_128;
-
-    // again, quotient_lo is just a guess at this point, it might be slightly too large
-    while product_lo > full_lower_numerator {
-        quotient_lo -= 1;
-        product_lo -= divisor_full_128;
-    }
-
-    // We now have our separate quotients, now we just have to add them together
-    (quotient_hi << 32) | quotient_lo
 }
 
 pub(crate) fn divide_256_max_by_128(divisor: u128) -> (u128, u128) {
@@ -352,7 +406,7 @@ pub(crate) fn divide_256_max_by_128(divisor: u128) -> (u128, u128) {
 			// divide the uppermost bits of the remaining numerator to get "sub_quotient" which will be our guess for this quotient element
 			let numerator_hi = if numerator_slice.len() - numerator_start_idx > 1 { numerator_slice[numerator_start_idx + 1] } else { 0 };
 			let numerator_lo = numerator_slice[numerator_start_idx];
-			let mut sub_quotient = divide_128_by_64_preshifted(numerator_hi, numerator_lo, reduced_divisor_hi, divisor_hi);
+			let mut sub_quotient = divide_128_by_64_preshifted_reduced(numerator_hi, numerator_lo, reduced_divisor_hi, divisor_hi);
 
 			let mut tmp_product = [0; 3];
 			long_multiplication::long_multiply(&divisor_slice, sub_quotient, &mut tmp_product);

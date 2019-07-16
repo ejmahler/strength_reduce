@@ -55,7 +55,7 @@ fn multiply_256_by_64_helper(product: &mut [u64], a: &[u64;4], b: u64) {
 	}
 }
 
-// product += a * b
+// compute product += a * b
 #[inline]
 pub(crate) fn long_multiply(a: &[u64], b: u64, product: &mut [u64]) {
 	if b == 0 {
