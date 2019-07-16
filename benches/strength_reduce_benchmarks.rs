@@ -158,6 +158,32 @@ mod bench_u32 {
 mod bench_u64 {
 	use super::*;
 	bench_unsigned!(StrengthReducedU64, u64);
+
+	// generates random divisors with values in the range [1<<bit_min, 1<<bit_max)
+	fn generate_random_divisors(bit_min: u32, bit_max: u32, count: usize) -> Vec<u64> {
+		assert!(bit_min < bit_max);
+		assert!(bit_max <= 64);
+
+		let min_value = 1u64 << bit_min;
+		let max_value = 1u64.checked_shl(bit_max).map_or(core::u64::MAX, |v| v - 1);
+
+		let mut gen = StdRng::seed_from_u64(5673573);
+		let dist = Uniform::new_inclusive(min_value, max_value);
+		
+		(0..count).map(|_| dist.sample(&mut gen)).collect()
+	}
+
+	// since the constructor for StrengthReducedU64 is so dependent on input size, we're going to do a few more targeted "single division" tests at specific sizes, so we can measure each "size class" separately
+	#[bench]
+	fn targeted_single_division_32bit(b: &mut test::Bencher) {
+		let divisors = test::black_box(generate_random_divisors(0, 32, REPETITIONS));
+		b.iter(|| { test::black_box(compute_single_division(&divisors)); });
+	}
+	#[bench]
+	fn targeted_single_division_64bit(b: &mut test::Bencher) {
+		let divisors = test::black_box(generate_random_divisors(32, 64, REPETITIONS));
+		b.iter(|| { test::black_box(compute_single_division(&divisors)); });
+	}
 }
 mod bench_u128 {
 	use super::*;
