@@ -1,8 +1,10 @@
+extern crate core;
+
 const U32_MAX: u64 = core::u32::MAX as u64;
 const U64_MAX: u128 = core::u64::MAX as u128;
 
-use crate::StrengthReducedU64;
-use crate::long_multiplication;
+use ::StrengthReducedU64;
+use ::long_multiplication;
 
 // divides a 128-bit number by a 64-bit divisor, returning the quotient as a 64-bit number
 // assumes that the divisor and numerator have both already been bit-shifted so that divisor.leading_zeros() == 0
