@@ -1,3 +1,9 @@
+# Release 0.2.3 (2019-12-27)
+
+### Fixes
+
+- Fixed a compile error on rustc 1.26
+
 # Release 0.2.2 (2019-06-12)
 
 ### Changes
