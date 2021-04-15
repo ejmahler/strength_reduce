@@ -3,6 +3,7 @@
 ### Fixes
 
 - Fixed a compile error on rustc 1.26
+- Added `StrengthReducedU128`
 
 # Release 0.2.2 (2019-06-12)
 
