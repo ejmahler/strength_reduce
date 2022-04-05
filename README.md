@@ -7,9 +7,9 @@
 `strength_reduce` implements integer division and modulo via "arithmetic strength reduction".
 
 Modern processors can do multiplication and shifts much faster than division, and "arithmetic strength reduction" is an algorithm to transform divisions into multiplications and shifts.
-ompilers already perform this optimization for divisors that are known at compile time; this library enables this optimization for divisors that are only known at runtime.
+Compilers already perform this optimization for divisors that are known at compile time; this library enables this optimization for divisors that are only known at runtime.
 
-Benchmarking shows a 5-10x speedup or integer division and modulo operations.
+Benchmarking shows a 5-10x speedup on integer division and modulo operations.
 
 This library is intended for hot loops like the example below, where a division is repeated many times in a loop with the divisor remaining unchanged. There is a setup cost associated with creating stength-reduced division instances, so using strength-reduced division for 1-2 divisions is not worth the setup cost. The break-even point differs by use-case, but is typically low: Benchmarking has shown that takes 3 to 4 repeated divisions with the same StengthReduced## instance to be worth it.
 
