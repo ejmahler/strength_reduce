@@ -14,6 +14,6 @@ categories = ["algorithms", "data-structures"]
 readme = "README.md"
 
 [dev-dependencies]
-proptest = "0.8.7"
-num-bigint = "0.2"
-rand = "0.7"
+proptest = "1.0.0"
+num-bigint = "0.4"
+rand = "0.8"
