@@ -1,3 +1,12 @@
+# Release 0.2.4 (2022-11-07)
+
+### Fixes
+
+- Fixed broken MIT license file link
+- Added missing license files to repository
+- Upgraded dependencies to proptest 1.0.0, num-bigint 0.4, rand 0.8
+- Typo fixes in docs
+
 # Release 0.2.3 (2019-12-27)
 
 ### Fixes
