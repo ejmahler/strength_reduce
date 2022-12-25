@@ -41,7 +41,7 @@ extern crate num_bigint;
 #[cfg(test)]
 extern crate rand;
 
-use core::ops::{Div, Rem};
+use core::ops::{Div, DivAssign, Rem, RemAssign};
 
 mod long_division;
 mod long_multiplication;
@@ -474,6 +474,32 @@ strength_reduced_u16!(StrengthReducedUsize, usize);
 strength_reduced_u32!(StrengthReducedUsize, usize);
 #[cfg(target_pointer_width = "64")]
 strength_reduced_u64!(StrengthReducedUsize, usize);
+
+// Implement assign ops via the non-assigning versions
+macro_rules! impl_assign_ops {
+    ($for:ty, $reduced:ty) => {
+        impl DivAssign<$reduced> for $for {
+            #[inline]
+            fn div_assign(&mut self, rhs: $reduced) {
+                *self = *self / rhs
+            }
+        }
+
+        impl RemAssign<$reduced> for $for {
+            #[inline]
+            fn rem_assign(&mut self, rhs: $reduced) {
+                *self = *self % rhs
+            }
+        }
+    };
+}
+
+impl_assign_ops!(u8, StrengthReducedU8);
+impl_assign_ops!(u16, StrengthReducedU16);
+impl_assign_ops!(u32, StrengthReducedU32);
+impl_assign_ops!(u64, StrengthReducedU64);
+impl_assign_ops!(u128, StrengthReducedU128);
+impl_assign_ops!(usize, StrengthReducedUsize);
 
 #[cfg(test)]
 mod unit_tests {
