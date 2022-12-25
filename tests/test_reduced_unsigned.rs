@@ -23,6 +23,12 @@ macro_rules! reduction_proptest {
                 let (reduced_combined_div, reduced_combined_rem) = $struct_name::div_rem(numerator, reduced_divisor);
                 assert_eq!(expected_div, reduced_combined_div, "div_rem divide failed with numerator: {}, divisor: {}", numerator, divisor);
                 assert_eq!(expected_rem, reduced_combined_rem, "div_rem modulo failed with numerator: {}, divisor: {}", numerator, divisor);
+                let mut assign_div = numerator;
+                assign_div /= divisor;
+                let mut assign_rem = numerator;
+                assign_rem %= divisor;
+                assert_eq!(expected_div, assign_div, "Divide assign failed with numerator: {}, divisor: {}", numerator, divisor);
+                assert_eq!(expected_rem, assign_rem, "Modulo assign failed with numerator: {}, divisor: {}", numerator, divisor);
             }
 
 
