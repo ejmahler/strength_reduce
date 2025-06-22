@@ -7,8 +7,8 @@ description = "Faster integer division and modulus operations"
 
 license = "MIT OR Apache-2.0"
 
-repository = "http://github.com/ejmahler/strength_reduce"
-documentation = "http://docs.rs/strength_reduce"
+repository = "https://github.com/ejmahler/strength_reduce"
+documentation = "https://docs.rs/strength_reduce"
 keywords = ["arithmetic", "strength", "reduction", "division", "modulus"]
 categories = ["algorithms", "data-structures"]
 readme = "README.md"
