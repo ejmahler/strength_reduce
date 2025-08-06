@@ -64,7 +64,7 @@ impl StrengthReducedU8 {
     /// 
     /// Panics if `divisor` is 0
     #[inline]
-    pub fn new(divisor: u8) -> Self {
+    pub const fn new(divisor: u8) -> Self {
         assert!(divisor > 0);
 
         if divisor.is_power_of_two() { 
@@ -146,7 +146,7 @@ macro_rules! strength_reduced_u16 {
             /// 
             /// Panics if `divisor` is 0
             #[inline]
-            pub fn new(divisor: $primitive_type) -> Self {
+            pub const fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
 
                 if divisor.is_power_of_two() { 
@@ -227,7 +227,7 @@ macro_rules! strength_reduced_u32 {
             /// 
             /// Panics if `divisor` is 0
             #[inline]
-            pub fn new(divisor: $primitive_type) -> Self {
+            pub const fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
 
                 if divisor.is_power_of_two() { 
@@ -319,7 +319,7 @@ macro_rules! strength_reduced_u64 {
             /// 
             /// Panics if `divisor` is 0
             #[inline]
-            pub fn new(divisor: $primitive_type) -> Self {
+            pub const fn new(divisor: $primitive_type) -> Self {
                 assert!(divisor > 0);
 
                 if divisor.is_power_of_two() { 
