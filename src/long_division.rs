@@ -47,11 +47,11 @@ const fn divide_128_by_64_preshifted(numerator_hi: u64, numerator_lo: u64, divis
 }
 
 const fn const_min(lhs: u64, rhs: u64) -> u64 {
-	if lhs < rhs {
-		lhs
-	} else {
-		rhs
-	}
+    if lhs < rhs {
+        lhs
+    } else {
+        rhs
+    }
 }
 
 // divides a 128-bit number by a 64-bit divisor, returning the quotient as a 64-bit number
